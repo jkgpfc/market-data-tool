@@ -1,0 +1,10 @@
+symbol,exchange,asset_class,notes
+AAPL,,Stock,Apple Inc.
+^GSPC,,Index,S&P 500 Index
+SPY,,ETF,SPDR S&P 500 ETF Trust
+EURUSD=X,,Forex,Euro to US Dollar
+GC=F,,Futures,Gold Futures
+CL=F,,Commodity Futures,Crude Oil Futures
+NIFTY50,NSE,Index,Nifty 50 alias resolved to ^NSEI
+RELIANCE,NSE,Stock,NSE symbol resolved to RELIANCE.NS
+500325,BSE,Stock,BSE code resolved to 500325.BO
