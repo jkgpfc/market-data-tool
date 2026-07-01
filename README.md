@@ -78,6 +78,23 @@ python main.py MSFT BTC-USD --csv sample_input.csv --output market_data_output.x
 
 The CSV reader prefers a `symbol` column and also accepts `ticker` or `instrument`. If none of those columns exist, the first column is used. An optional `exchange` column can contain `NSE` or `BSE` to normalize bare India-market symbols to Yahoo suffixes.
 
+
+## GitHub Actions: Generate Nifty 50 Excel on iPhone
+
+You can generate the ready-made Nifty 50 Excel workbook from GitHub on an iPhone without installing Python locally.
+
+1. Open this repository in the GitHub iOS app or Safari on your iPhone.
+2. Tap the **Actions** tab.
+3. Select **Generate Nifty 50 Excel** from the workflow list.
+4. Tap **Run workflow**.
+5. Keep the default branch selected, then tap the green **Run workflow** button.
+6. Wait for the run to finish. It installs Python 3.13, runs `pip install -r requirements.txt`, and executes `python main.py --csv nifty50_symbols.csv --output nifty50.xlsx`.
+7. Open the completed workflow run and scroll to **Artifacts**.
+8. Download the `nifty50.xlsx` artifact to your iPhone. If Safari downloads it as a ZIP, open the ZIP in the Files app to access the Excel workbook.
+9. The workflow also commits the generated workbook to `output/nifty50.xlsx`, so you can browse to the `output/` folder in the repository and download the latest committed copy.
+
+> Note: Yahoo Finance availability can vary by time, exchange, and network conditions. If a run fails or includes per-symbol errors, run the workflow again later.
+
 ## Yahoo Finance Symbol Examples
 
 | Asset type | Example symbols |
