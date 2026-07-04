@@ -76,3 +76,4 @@ class StrategyDefinition:
     initial_capital: float = 1_000_000.0
     lot_size: int = 50
     margin_per_lot: float = 150_000.0
+    initial_spot: float | None = None

@@ -35,6 +35,13 @@ def main() -> None:
         brokerage = st.number_input("Brokerage per order", min_value=0.0, value=20.0, step=1.0)
         slippage_bps = st.number_input("Slippage (bps)", min_value=0.0, value=2.0, step=0.5)
         margin = st.number_input("Margin per lot", min_value=0.0, value=150_000.0, step=10000.0)
+        initial_spot = st.number_input(
+            "Initial spot baseline (0 = first spot close)",
+            min_value=0.0,
+            value=0.0,
+            step=50.0,
+            help="Fresh +1%, +2%, -1%, -2% trigger levels are measured from this baseline.",
+        )
 
     strategy_choice = st.radio("Strategy input", [BUILT_IN_STRATEGY_NAME, "Custom natural-language strategy"], horizontal=True)
     if strategy_choice == BUILT_IN_STRATEGY_NAME:
@@ -50,6 +57,7 @@ def main() -> None:
         try:
             data = load_sample_data() if use_sample else _load_uploaded_data(spot_file, futures_file, options_file, expiry_file)
             strategy = built_in_strategy() if strategy_choice == BUILT_IN_STRATEGY_NAME else parse_strategy(strategy_text, lot_size=int(lot_size), initial_capital=initial_capital)
+            strategy = _with_runtime_values(strategy, initial_capital, int(lot_size), margin, initial_spot or None)
             strategy = _with_runtime_values(strategy, initial_capital, int(lot_size), margin)
             result = BacktestEngine(data, CostModel(brokerage_per_order=brokerage, slippage_bps=slippage_bps, margin_per_lot=margin)).run(strategy)
             _render_result(result)
@@ -65,6 +73,11 @@ def _load_uploaded_data(spot_file, futures_file, options_file, expiry_file):  # 
     return load_market_data(spot_file, futures_file, options_file, expiry_file)
 
 
+def _with_runtime_values(strategy, initial_capital: float, lot_size: int, margin: float, initial_spot: float | None):  # noqa: ANN001
+    from dataclasses import replace
+
+    legs = tuple(replace(leg, quantity=max(lot_size, leg.quantity)) for leg in strategy.legs)
+    return replace(strategy, initial_capital=initial_capital, lot_size=lot_size, margin_per_lot=margin, initial_spot=initial_spot, legs=legs)
 def _with_runtime_values(strategy, initial_capital: float, lot_size: int, margin: float):  # noqa: ANN001
     from dataclasses import replace
 

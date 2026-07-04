@@ -13,6 +13,28 @@ from expiry_utils import should_rollover
 from instruments import Instrument, InstrumentType, OptionType, Side, StrategyDefinition
 
 
+def calculate_trigger_level(current_spot: float, initial_spot: float, step_pct: float) -> int:
+    """Calculate the integer trigger level from the initial spot baseline.
+
+    Returns 0 until price has moved at least one full step. Positive moves return
+    +1, +2, +3, etc.; negative moves return -1, -2, -3, etc. The baseline is
+    never reset by this helper, and the 0% level is never considered a trigger.
+    """
+    if initial_spot <= 0:
+        raise ValueError("Initial spot price must be greater than zero")
+    if step_pct <= 0:
+        raise ValueError("Trigger percentage must be greater than zero")
+
+    step = step_pct / 100
+    pct_move = (current_spot - initial_spot) / initial_spot
+    epsilon = 1e-12
+    if pct_move >= step:
+        return int((pct_move + epsilon) // step)
+    if pct_move <= -step:
+        return -int((abs(pct_move) + epsilon) // step)
+    return 0
+
+
 @dataclass(slots=True)
 class Position:
     instrument: Instrument
@@ -55,6 +77,8 @@ class BacktestEngine:
         positions: list[Position] = []
         trade_rows: list[dict] = []
         mtm_rows: list[dict] = []
+        triggered_spots: set[int] = set()
+        initial_spot = strategy.initial_spot
         used_levels: set[float] = set()
         reference_level: float | None = None
 
@@ -65,6 +89,8 @@ class BacktestEngine:
         for row in spot.itertuples(index=False):
             as_of = pd.Timestamp(row.date)
             spot_close = float(row.close)
+            if initial_spot is None:
+                initial_spot = spot_close
             reference_level = spot_close if reference_level is None else reference_level
 
             # Roll and expire existing positions before fresh entries.
@@ -87,6 +113,17 @@ class BacktestEngine:
                         positions.append(new_position)
                         cash += cash_delta
                         trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", cash_delta))
+
+            for level in self._trigger_levels(strategy, spot_close, initial_spot, triggered_spots):
+                reason = f"trigger_{level:+d}"
+                for leg in strategy.legs:
+                    position, cash_delta = self._open_position(leg, strategy, as_of, spot_close, reason)
+                    if position:
+                        positions.append(position)
+                        cash += cash_delta
+                        trade_rows.append(self._trade_row(position, as_of, "OPEN", reason, cash_delta))
+                if strategy.trigger.no_repeat_levels:
+                    triggered_spots.add(level)
                         trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", -cash_delta))
 
             if self._triggered(strategy, spot_close, reference_level):
@@ -124,6 +161,26 @@ class BacktestEngine:
         equity_curve = mtm[["date", "equity"]].copy() if not mtm.empty else pd.DataFrame(columns=["date", "equity"])
         return _assemble_result(trade_log, mtm, equity_curve, strategy.initial_capital)
 
+    def _trigger_levels(self, strategy: StrategyDefinition, spot_close: float, initial_spot: float, triggered_spots: set[int]) -> list[int]:
+        """Return fresh percentage-move levels crossed from the initial spot baseline.
+
+        A 1% trigger size produces levels +1, +2, +3 and -1, -2, -3 from
+        the user-provided baseline. Each integer level is emitted at most once
+        when no-repeat logic is enabled, even if price later revisits it.
+        """
+        current_level = calculate_trigger_level(spot_close, initial_spot, strategy.trigger.move_pct)
+        if current_level == 0:
+            return []
+
+        if strategy.trigger.direction == "up" and current_level < 0:
+            return []
+        if strategy.trigger.direction == "down" and current_level > 0:
+            return []
+
+        levels = range(1, current_level + 1) if current_level > 0 else range(-1, current_level - 1, -1)
+        if strategy.trigger.no_repeat_levels:
+            return [level for level in levels if level not in triggered_spots]
+        return list(levels)
     def _triggered(self, strategy: StrategyDefinition, spot_close: float, reference: float) -> bool:
         pct_move = ((spot_close - reference) / reference) * 100
         direction = strategy.trigger.direction

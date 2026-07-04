@@ -306,6 +306,9 @@ A Streamlit application for event-driven Nifty 50 Futures & Options backtesting.
   - Monthly, weekly, next-month, and next-to-next-month contracts.
   - Call/put buy and sell legs.
   - Futures buy and sell legs.
+  - Initial-spot-baseline percentage triggers for +1%, +2%, -1%, -2%, and other fresh levels.
+  - No-repeat level logic using already-triggered spot levels.
+  - Calendar switching: nearest monthly expiry through the 15th, then next-to-next-month contracts after the 15th.
   - Percentage move triggers.
   - No-repeat level logic.
   - Rollover after the 15th or another parsed day.
@@ -318,6 +321,7 @@ A Streamlit application for event-driven Nifty 50 Futures & Options backtesting.
 
 The app includes **“1 Percent Monthly Call + Future Roll Strategy”**:
 
+> Whenever Nifty makes a fresh 1% move from the initial spot baseline (`+1%`, `+2%`, `-1%`, `-2%`, etc.), sell the selected monthly call and buy Nifty future. Do not re-enter a level already traded. Through the 15th of each month use the nearest monthly expiry; after the 15th use next-to-next-month option and future contracts. Continue until the backtest end date.
 > Whenever Nifty moves by 1% from the last executed level, sell the selected monthly call and buy Nifty future. Do not re-enter a level already traded. After the 15th of each month, use next-to-next-month option and future contracts. Continue until the backtest end date.
 
 ### Run the backtester app
@@ -327,6 +331,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+Use the sidebar to select sample data or upload your own CSV files, set assumptions, and optionally enter an initial spot baseline. If the baseline is `0`, the engine uses the first spot close. Then choose the built-in strategy or enter a custom natural-language strategy and click **Run backtest**.
 Use the sidebar to select sample data or upload your own CSV files. Then choose the built-in strategy or enter a custom natural-language strategy and click **Run backtest**.
 
 ### Backtester CSV schemas
