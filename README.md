@@ -1,6 +1,9 @@
 # Market Data Tool
 
-A production-ready Python CLI for fetching global market data from Yahoo Finance, calculating common technical indicators, and exporting a formatted Excel workbook.
+This repository contains two tools:
+
+A. **Nifty 50 market-data Excel tool** — a Python CLI for fetching global market data from Yahoo Finance, calculating common technical indicators, and exporting a formatted Excel workbook.
+B. **Nifty 50 F&O Streamlit backtester** — an interactive app for testing constrained Futures & Options strategies against uploaded or bundled sample CSV data.
 
 ## Features
 
@@ -175,7 +178,7 @@ requirements.txt      # Runtime dependencies
 
 ## Nifty 50 Futures & Options Backtester
 
-A Streamlit application for event-driven Nifty 50 Futures & Options backtesting. Users can describe a constrained natural-language F&O strategy, upload Nifty spot/futures/options/expiry CSV files, run a backtest, inspect a dashboard, and download an Excel report.
+A Streamlit application for event-driven Nifty 50 Futures & Options backtesting. Users can describe a constrained natural-language F&O strategy, upload Nifty spot/futures/options/expiry CSV files, run a backtest, inspect a dashboard, and download an Excel report. The bundled data is intentionally small sample data for local testing; serious research requires licensed, complete historical Nifty F&O data.
 
 ### What this app supports
 
@@ -197,11 +200,12 @@ A Streamlit application for event-driven Nifty 50 Futures & Options backtesting.
 
 The app includes **“1 Percent Monthly Call + Future Roll Strategy”**:
 
-> When Nifty spot moves up 1 percent from the previous trigger level, buy one monthly call and buy one monthly future. Do not repeat the same trigger level. Rollover open futures after the 15th to next month.
+> Whenever Nifty moves by 1% from the last executed level, sell the selected monthly call and buy Nifty future. Do not re-enter a level already traded. After the 15th of each month, use next-to-next-month option and future contracts. Continue until the backtest end date.
 
 ### Run the backtester app
 
 ```bash
+pip install -r requirements.txt
 streamlit run app.py
 ```
 
@@ -282,6 +286,8 @@ tests/                # Automated tests
 
 ### Backtester notes and limitations
 
+- The bundled `sample_data/` CSVs are clean, small sample files for smoke testing and demonstrations only; they are not real 25-year historical F&O data.
+- Serious analysis requires licensed, complete Nifty spot, futures, options, and expiry-history data with corporate/action and exchange-calendar quality controls.
 - The parser is deterministic and intentionally constrained; it is designed for auditable strategy phrases rather than arbitrary LLM interpretation.
 - If an exact option quote is missing, the engine uses a conservative intrinsic-value proxy so the sample app can continue to run. Production deployments should provide complete option-chain history.
 - Transaction cost defaults are approximate and configurable in the Streamlit sidebar.
