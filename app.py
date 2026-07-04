@@ -58,6 +58,7 @@ def main() -> None:
             data = load_sample_data() if use_sample else _load_uploaded_data(spot_file, futures_file, options_file, expiry_file)
             strategy = built_in_strategy() if strategy_choice == BUILT_IN_STRATEGY_NAME else parse_strategy(strategy_text, lot_size=int(lot_size), initial_capital=initial_capital)
             strategy = _with_runtime_values(strategy, initial_capital, int(lot_size), margin, initial_spot or None)
+            strategy = _with_runtime_values(strategy, initial_capital, int(lot_size), margin)
             result = BacktestEngine(data, CostModel(brokerage_per_order=brokerage, slippage_bps=slippage_bps, margin_per_lot=margin)).run(strategy)
             _render_result(result)
         except Exception as exc:  # noqa: BLE001 - Streamlit should show user-friendly errors.
@@ -77,6 +78,11 @@ def _with_runtime_values(strategy, initial_capital: float, lot_size: int, margin
 
     legs = tuple(replace(leg, quantity=max(lot_size, leg.quantity)) for leg in strategy.legs)
     return replace(strategy, initial_capital=initial_capital, lot_size=lot_size, margin_per_lot=margin, initial_spot=initial_spot, legs=legs)
+def _with_runtime_values(strategy, initial_capital: float, lot_size: int, margin: float):  # noqa: ANN001
+    from dataclasses import replace
+
+    legs = tuple(replace(leg, quantity=max(lot_size, leg.quantity)) for leg in strategy.legs)
+    return replace(strategy, initial_capital=initial_capital, lot_size=lot_size, margin_per_lot=margin, legs=legs)
 
 
 def _render_result(result) -> None:  # noqa: ANN001

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -78,6 +79,8 @@ class BacktestEngine:
         mtm_rows: list[dict] = []
         triggered_spots: set[int] = set()
         initial_spot = strategy.initial_spot
+        used_levels: set[float] = set()
+        reference_level: float | None = None
 
         spot = self.data.spot.dropna(subset=["date", "close"]).sort_values("date")
         if spot.empty:
@@ -88,6 +91,7 @@ class BacktestEngine:
             spot_close = float(row.close)
             if initial_spot is None:
                 initial_spot = spot_close
+            reference_level = spot_close if reference_level is None else reference_level
 
             # Roll and expire existing positions before fresh entries.
             for position in list(positions):
@@ -101,6 +105,7 @@ class BacktestEngine:
                     and position.instrument.expiry_bucket == "monthly"
                     and should_rollover(as_of, position.expiry, strategy.rollover_after_day)
                 ):
+                elif position.instrument.instrument_type is InstrumentType.FUTURE and should_rollover(as_of, position.expiry, strategy.rollover_after_day):
                     cash += self._close_position(position, as_of, price, "rollover", trade_rows)
                     positions.remove(position)
                     new_position, cash_delta = self._open_position(position.instrument, strategy, as_of, spot_close, "rollover-entry")
@@ -119,6 +124,20 @@ class BacktestEngine:
                         trade_rows.append(self._trade_row(position, as_of, "OPEN", reason, cash_delta))
                 if strategy.trigger.no_repeat_levels:
                     triggered_spots.add(level)
+                        trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", -cash_delta))
+
+            if self._triggered(strategy, spot_close, reference_level):
+                level = round(reference_level * (1 + strategy.trigger.move_pct / 100), 2)
+                if not strategy.trigger.no_repeat_levels or level not in used_levels:
+                    for leg in strategy.legs:
+                        position, cash_delta = self._open_position(leg, strategy, as_of, spot_close, "trigger")
+                        if position:
+                            positions.append(position)
+                            cash += cash_delta
+                            trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", cash_delta))
+                            trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", -cash_delta))
+                    used_levels.add(level)
+                    reference_level = spot_close
 
             open_mtm = sum(position.mtm(self._price_position(position, as_of, spot_close)) for position in positions)
             margin = self.cost_model.required_margin(sum(abs(p.quantity) // strategy.lot_size for p in positions))
@@ -162,6 +181,11 @@ class BacktestEngine:
         if strategy.trigger.no_repeat_levels:
             return [level for level in levels if level not in triggered_spots]
         return list(levels)
+    def _triggered(self, strategy: StrategyDefinition, spot_close: float, reference: float) -> bool:
+        pct_move = ((spot_close - reference) / reference) * 100
+        direction = strategy.trigger.direction
+        threshold = strategy.trigger.move_pct
+        return (direction in {"up", "both"} and pct_move >= threshold) or (direction in {"down", "both"} and pct_move <= -threshold)
 
     def _open_position(self, instrument: Instrument, strategy: StrategyDefinition, as_of: pd.Timestamp, spot_close: float, reason: str) -> tuple[Position | None, float]:
         instrument = self._effective_instrument(instrument, strategy, as_of)
