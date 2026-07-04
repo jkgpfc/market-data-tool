@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from dataclasses import dataclass
 
 import pandas as pd
@@ -73,6 +74,11 @@ class BacktestEngine:
                 if strategy.square_off_on_expiry and as_of >= position.expiry:
                     cash += self._close_position(position, as_of, price, "expiry", trade_rows)
                     positions.remove(position)
+                elif (
+                    position.instrument.instrument_type is InstrumentType.FUTURE
+                    and position.instrument.expiry_bucket == "monthly"
+                    and should_rollover(as_of, position.expiry, strategy.rollover_after_day)
+                ):
                 elif position.instrument.instrument_type is InstrumentType.FUTURE and should_rollover(as_of, position.expiry, strategy.rollover_after_day):
                     cash += self._close_position(position, as_of, price, "rollover", trade_rows)
                     positions.remove(position)
@@ -80,6 +86,7 @@ class BacktestEngine:
                     if new_position:
                         positions.append(new_position)
                         cash += cash_delta
+                        trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", cash_delta))
                         trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", -cash_delta))
 
             if self._triggered(strategy, spot_close, reference_level):
@@ -90,6 +97,7 @@ class BacktestEngine:
                         if position:
                             positions.append(position)
                             cash += cash_delta
+                            trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", cash_delta))
                             trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", -cash_delta))
                     used_levels.add(level)
                     reference_level = spot_close
@@ -123,6 +131,7 @@ class BacktestEngine:
         return (direction in {"up", "both"} and pct_move >= threshold) or (direction in {"down", "both"} and pct_move <= -threshold)
 
     def _open_position(self, instrument: Instrument, strategy: StrategyDefinition, as_of: pd.Timestamp, spot_close: float, reason: str) -> tuple[Position | None, float]:
+        instrument = self._effective_instrument(instrument, strategy, as_of)
         expiry = self.data.expiries.next_expiry(as_of, instrument.expiry_bucket)
         strike = self._select_strike(instrument, spot_close)
         price = self._lookup_price(instrument, as_of, expiry, spot_close, strike)
@@ -187,6 +196,18 @@ class BacktestEngine:
             return None
         raw = spot_close * (1 + instrument.strike_offset_pct / 100)
         return round(raw / 50) * 50
+
+    def _effective_instrument(self, instrument: Instrument, strategy: StrategyDefinition, as_of: pd.Timestamp) -> Instrument:
+        """Use deferred monthly contracts after the configured rollover day.
+
+        The built-in strategy trades the current monthly contract until the rollover day,
+        then opens new option and future positions in the next-to-next-month bucket.
+        This also keeps custom monthly strategies away from near-expiry contracts after
+        their configured rollover threshold.
+        """
+        if instrument.expiry_bucket == "monthly" and pd.Timestamp(as_of).day > strategy.rollover_after_day:
+            return replace(instrument, expiry_bucket="next_to_next_month")
+        return instrument
 
 
 def _intrinsic_proxy(spot: float, strike: float, option_type: OptionType) -> float:
