@@ -1,0 +1,60 @@
+name: Generate Nifty 50 Excel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-nifty50:
+    name: Generate Nifty 50 workbook
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate Nifty 50 Excel workbook
+        run: |
+          mkdir -p output
+          python main.py --csv nifty50_symbols.csv --output output/nifty50.xlsx
+
+      - name: Commit generated workbook
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -f output/nifty50.xlsx
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git stash push --include-untracked -- output/nifty50.xlsx
+          git fetch origin main
+          git pull --rebase origin main
+          git stash pop
+
+          git add -f output/nifty50.xlsx
+          git diff --cached --quiet && echo "No changes" || git commit -m "Update generated Nifty 50 workbook"
+          git push
+
+      - name: Upload workbook artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nifty50.xlsx
+          path: output/nifty50.xlsx
+          if-no-files-found: error
