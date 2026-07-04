@@ -11,6 +11,8 @@ BUILT_IN_STRATEGY_TEXT = (
     "When Nifty spot moves up 1 percent from the last executed level, sell one selected monthly call and buy "
     "one Nifty future. Do not repeat the same trigger level. After the 15th of each month, use "
     "next-to-next-month option and future contracts. Continue until the backtest end date."
+    "When Nifty spot moves up 1 percent from the previous trigger level, buy one monthly call and buy one "
+    "monthly future. Do not repeat the same trigger level. Rollover open futures after the 15th to next month."
 )
 
 
@@ -21,6 +23,7 @@ def built_in_strategy() -> StrategyDefinition:
         description=BUILT_IN_STRATEGY_TEXT,
         legs=(
             Instrument(InstrumentType.OPTION, Side.SELL, quantity=50, expiry_bucket="monthly", option_type=OptionType.CALL),
+            Instrument(InstrumentType.OPTION, Side.BUY, quantity=50, expiry_bucket="monthly", option_type=OptionType.CALL),
             Instrument(InstrumentType.FUTURE, Side.BUY, quantity=50, expiry_bucket="monthly"),
         ),
         trigger=TriggerRule(move_pct=1.0, direction="up", no_repeat_levels=True),

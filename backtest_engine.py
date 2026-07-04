@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -78,6 +79,7 @@ class BacktestEngine:
                     and position.instrument.expiry_bucket == "monthly"
                     and should_rollover(as_of, position.expiry, strategy.rollover_after_day)
                 ):
+                elif position.instrument.instrument_type is InstrumentType.FUTURE and should_rollover(as_of, position.expiry, strategy.rollover_after_day):
                     cash += self._close_position(position, as_of, price, "rollover", trade_rows)
                     positions.remove(position)
                     new_position, cash_delta = self._open_position(position.instrument, strategy, as_of, spot_close, "rollover-entry")
@@ -85,6 +87,7 @@ class BacktestEngine:
                         positions.append(new_position)
                         cash += cash_delta
                         trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", cash_delta))
+                        trade_rows.append(self._trade_row(new_position, as_of, "OPEN", "rollover-entry", -cash_delta))
 
             if self._triggered(strategy, spot_close, reference_level):
                 level = round(reference_level * (1 + strategy.trigger.move_pct / 100), 2)
@@ -95,6 +98,7 @@ class BacktestEngine:
                             positions.append(position)
                             cash += cash_delta
                             trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", cash_delta))
+                            trade_rows.append(self._trade_row(position, as_of, "OPEN", "trigger", -cash_delta))
                     used_levels.add(level)
                     reference_level = spot_close
 

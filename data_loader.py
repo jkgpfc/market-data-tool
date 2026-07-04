@@ -26,6 +26,7 @@ def load_csv(file: str | Path | BinaryIO, *, required: set[str], name: str) -> p
     except Exception as exc:  # noqa: BLE001 - include CSV name in user-facing errors.
         raise ValueError(f"Unable to read {name} CSV: {exc}") from exc
 
+    frame = pd.read_csv(file)
     frame.columns = [str(column).strip().lower() for column in frame.columns]
     missing = required - set(frame.columns)
     if missing:
@@ -64,6 +65,15 @@ def load_csv(file: str | Path | BinaryIO, *, required: set[str], name: str) -> p
 
     sort_columns = [column for column in ["date", "expiry", "strike"] if column in frame.columns]
     return frame.sort_values(sort_columns).reset_index(drop=True) if sort_columns else frame.reset_index(drop=True)
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+        frame = frame.dropna(subset=["date"])
+    if "expiry" in frame.columns:
+        frame["expiry"] = pd.to_datetime(frame["expiry"], errors="coerce").dt.normalize()
+    for column in ["open", "high", "low", "close", "volume", "strike"]:
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return frame.sort_values([column for column in ["date", "expiry", "strike"] if column in frame.columns]).reset_index(drop=True)
 
 
 def load_market_data(
@@ -79,6 +89,7 @@ def load_market_data(
     invalid_option_types = sorted(set(options["option_type"]) - {"CE", "PE"})
     if invalid_option_types:
         raise ValueError(f"Options CSV option_type must be CE or PE; found: {', '.join(invalid_option_types)}")
+    options["option_type"] = options["option_type"].astype(str).str.upper()
     expiries = ExpiryCalendar.from_frame(load_csv(expiry_file, required={"expiry"}, name="Expiry"))
     return MarketDataBundle(spot=spot, futures=futures, options=options, expiries=expiries)
 

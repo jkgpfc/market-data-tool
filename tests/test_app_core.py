@@ -7,6 +7,11 @@ from data_loader import load_csv, load_sample_data
 from expiry_utils import ExpiryCalendar
 from export_utils import backtest_to_excel_bytes
 from instruments import InstrumentType, OptionType, Side
+import pandas as pd
+
+from backtest_engine import BacktestEngine
+from data_loader import load_sample_data
+from expiry_utils import ExpiryCalendar
 from strategy_parser import BUILT_IN_STRATEGY_NAME, parse_strategy
 
 
@@ -22,6 +27,8 @@ def test_builtin_strategy_parser():
     assert option_leg.side is Side.SELL
     assert future_leg.instrument_type is InstrumentType.FUTURE
     assert future_leg.side is Side.BUY
+    assert len(strategy.legs) == 2
+    assert strategy.rollover_after_day == 15
 
 
 def test_custom_strategy_parser_put_sell_weekly():
@@ -41,6 +48,13 @@ def test_expiry_calendar_monthly_buckets():
 
 
 def test_sample_backtest_runs_with_required_outputs():
+def test_expiry_calendar_monthly_bucket():
+    calendar = ExpiryCalendar.from_dates(["2024-01-04", "2024-01-25", "2024-02-29", "2024-03-28"])
+    assert calendar.next_expiry(pd.Timestamp("2024-01-05"), "monthly") == pd.Timestamp("2024-01-25")
+    assert calendar.next_expiry(pd.Timestamp("2024-01-05"), "next_month") == pd.Timestamp("2024-02-29")
+
+
+def test_sample_backtest_runs():
     data = load_sample_data()
     strategy = parse_strategy(BUILT_IN_STRATEGY_NAME)
     result = BacktestEngine(data).run(strategy)
@@ -77,3 +91,4 @@ def test_csv_validation_reports_missing_columns():
         assert "Spot CSV missing columns: close" in str(exc)
     else:  # pragma: no cover - defensive assertion path
         raise AssertionError("Expected CSV validation to reject missing close column")
+    assert "total_pnl" in result.summary
